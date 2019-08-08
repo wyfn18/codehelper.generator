@@ -1,6 +1,7 @@
 package com.ccnode.codegenerator.pojo;
 
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.vfs.VirtualFile;
 
 import java.util.List;
 
@@ -15,6 +16,9 @@ public class GenCodeRequest extends BaseRequest {
     List<String> pojoNames;
     String projectPath;
     String pathSplitter;
+
+    VirtualFile selectedPackage;
+    String basePackage;
 
     public GenCodeRequest() {
     }
@@ -48,6 +52,22 @@ public class GenCodeRequest extends BaseRequest {
 
     public void setProject(Project project) {
         this.project = project;
+    }
+
+    public VirtualFile getSelectedPackage() {
+        return selectedPackage;
+    }
+
+    public void setSelectedPackage(VirtualFile selectedPackage) {
+        this.selectedPackage = selectedPackage;
+    }
+
+    public String getBasePackage() {
+        return basePackage;
+    }
+
+    public void setBasePackage(String basePackage) {
+        this.basePackage = basePackage;
     }
 }
 
