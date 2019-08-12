@@ -1,34 +1,19 @@
 package com.ccnode.codegenerator.genCode;
 
-import com.ccnode.codegenerator.exception.BizException;
 import com.ccnode.codegenerator.pojo.GenCodeRequest;
 import com.ccnode.codegenerator.pojo.GenCodeResponse;
-import com.ccnode.codegenerator.pojo.OnePojoInfo;
-import com.ccnode.codegenerator.pojo.PojoFieldInfo;
-import com.ccnode.codegenerator.pojoHelper.OnePojoInfoHelper;
-import com.ccnode.codegenerator.util.GenCodeConfig;
-import com.ccnode.codegenerator.util.IOUtils;
 import com.ccnode.codegenerator.util.LoggerWrapper;
-import com.google.common.collect.Lists;
-import com.intellij.openapi.application.ApplicationManager;
-import com.intellij.openapi.command.WriteCommandAction;
-import com.intellij.openapi.roots.ProjectFileIndex;
-import com.intellij.openapi.roots.ProjectRootManager;
+import com.google.common.base.CaseFormat;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.vfs.VirtualFile;
-import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
-
-import static com.ccnode.codegenerator.genCode.GenDaoService.genDAO;
 
 /**
  * What always stop you is what you always believe.
@@ -58,8 +43,6 @@ public class GenHibernateCodeService {
             }
             LOGGER.info("UserConfigService.initConfig done");
 
-//            genPackage(response);
-
             response = genPojo(response);
             if (response.checkFailure()) {
                 return response;
@@ -71,23 +54,19 @@ public class GenHibernateCodeService {
                 return response;
             }
             LOGGER.info("genDao done");
-            GenServiceService.genService(response);
+
+            genService(response);
             if (response.checkFailure()) {
                 return response;
             }
-            LOGGER.info("UserConfigService.genService done");
-            GenMapperService.genMapper(response);
+            LOGGER.info("genService done");
+
+            genController(response);
             if (response.checkFailure()) {
                 return response;
             }
-            LOGGER.info("UserConfigService.genMapper done");
-            for (OnePojoInfo onePojoInfo : response.getPojoInfos()) {
-                OnePojoInfoHelper.flushFiles(onePojoInfo, response);
-            }
-            if (response.checkFailure()) {
-                return response;
-            }
-            LOGGER.info("UserConfigService.flushFiles done");
+            LOGGER.info("genController done");
+
             response.success();
 
         } catch (Exception e) {
@@ -130,6 +109,8 @@ public class GenHibernateCodeService {
             return response;
         }
 
+        String tableName = CaseFormat.UPPER_CAMEL.to(CaseFormat.LOWER_UNDERSCORE, pojoName);
+
         List<String> modelString = new LinkedList<>();
 
         modelString.add("package " + modelPackageName + ";");
@@ -144,7 +125,7 @@ public class GenHibernateCodeService {
         modelString.add(" */");
         modelString.add("@Data");
         modelString.add("@Entity");
-        modelString.add("@Table(name = \"" + pojoName.toLowerCase() + "\")");
+        modelString.add("@Table(name = \"" + tableName + "\")");
         modelString.add("public class " + pojoName + " implements Serializable {");
         modelString.add("");
         modelString.add("    @Id");
@@ -217,6 +198,147 @@ public class GenHibernateCodeService {
             e.printStackTrace();
             Messages.showErrorDialog("Dao text create error!", "error");
             response.failure("Dao text create error!");
+            return response;
+        }
+
+        return response;
+    }
+
+    private static GenCodeResponse genService(GenCodeResponse response) {
+
+        VirtualFile selectedPackage = response.getRequest().getSelectedPackage();
+
+        String basePackageName = response.getRequest().getBasePackage();
+        String servicePackageName = basePackageName + ".service";
+
+        String path = selectedPackage.getPath();
+        String pojoName = response.getRequest().getPojoNames().get(0);
+
+        String servicePathName = path + response.getPathSplitter() + "service" + response.getPathSplitter() + pojoName + "Service.java";
+
+        Path servicePath = Paths.get(servicePathName);
+
+        if (Files.exists(servicePath)) {
+            return response;
+        }
+
+        try {
+
+            if (!Files.exists(servicePath.getParent())) {
+                Files.createDirectories(servicePath.getParent());
+            }
+
+            Files.createFile(servicePath);
+
+        } catch (IOException e) {
+            e.printStackTrace();
+            Messages.showErrorDialog("Service create error!", "error");
+            response.failure("service create error!");
+            return response;
+        }
+
+        String pojoField = Character.toLowerCase(pojoName.charAt(0)) + pojoName.substring(1);
+
+        List<String> serviceString = new LinkedList<>();
+
+        serviceString.add("package " + servicePackageName + ";");
+        serviceString.add("");
+        serviceString.add("import com.uqiauto.uplus.common.dao.BaseDao;");
+        serviceString.add("import com.uqiauto.uplus.common.service.BaseService;");
+        serviceString.add("import " + basePackageName + ".dao." + pojoName + "Dao;");
+        serviceString.add("import " + basePackageName + ".model." + pojoName + ";");
+        serviceString.add("import org.springframework.beans.factory.annotation.Autowired;");
+        serviceString.add("import org.springframework.stereotype.Service;");
+        serviceString.add("import org.springframework.transaction.annotation.Transactional;");
+        serviceString.add("");
+        serviceString.add("@Service");
+        serviceString.add("@Transactional");
+        serviceString.add("public class " + pojoName + "Service extends BaseService<" + pojoName + "> {");
+        serviceString.add("");
+        serviceString.add("    @Autowired");
+        serviceString.add("    private " + pojoName + "Dao " + pojoField + "Dao;");
+        serviceString.add("");
+        serviceString.add("    @Override");
+        serviceString.add("    protected BaseDao<" + pojoName + "> getDao() {");
+        serviceString.add("        return " + pojoField + "Dao;");
+        serviceString.add("    }");
+        serviceString.add("");
+        serviceString.add("}");
+
+        try {
+            Files.write(servicePath ,serviceString);
+        } catch (IOException e) {
+            e.printStackTrace();
+            Messages.showErrorDialog("Service text create error!", "error");
+            response.failure("Service text create error!");
+            return response;
+        }
+
+        return response;
+    }
+
+    private static GenCodeResponse genController(GenCodeResponse response) {
+
+        VirtualFile selectedPackage = response.getRequest().getSelectedPackage();
+
+        String basePackageName = response.getRequest().getBasePackage();
+        String controllerPackageName = basePackageName + ".controller";
+
+        String path = selectedPackage.getPath();
+        String pojoName = response.getRequest().getPojoNames().get(0);
+
+        String controllerPathName = path + response.getPathSplitter() + "controller" + response.getPathSplitter() + pojoName + "Controller.java";
+
+        Path controllerPath = Paths.get(controllerPathName);
+
+        if (Files.exists(controllerPath)) {
+            return response;
+        }
+
+        try {
+
+            if (!Files.exists(controllerPath.getParent())) {
+                Files.createDirectories(controllerPath.getParent());
+            }
+
+            Files.createFile(controllerPath);
+
+        } catch (IOException e) {
+            e.printStackTrace();
+            Messages.showErrorDialog("Controller create error!", "error");
+            response.failure("Controller create error!");
+            return response;
+        }
+
+        String pojoField = Character.toLowerCase(pojoName.charAt(0)) + pojoName.substring(1);
+
+        List<String> controllerString = new LinkedList<>();
+
+        controllerString.add("package " + controllerPackageName + ";");
+        controllerString.add("");
+        controllerString.add("import " + basePackageName + ".service." + pojoName +"Service;");
+        controllerString.add("import org.springframework.beans.factory.annotation.Autowired;");
+        controllerString.add("import org.springframework.stereotype.Controller;");
+        controllerString.add("");
+        controllerString.add("/**");
+        controllerString.add(" * ");
+        controllerString.add(" */");
+        controllerString.add("@Controller(value = \"/" + pojoField + ".do\")");
+        controllerString.add("public class " + pojoName +"Controller {");
+        controllerString.add("");
+        controllerString.add("    @Autowired");
+        controllerString.add("    private " + pojoName +"Service " + pojoField + "Service;");
+        controllerString.add("");
+        controllerString.add("");
+        controllerString.add("}");
+
+
+        try {
+            Files.write(controllerPath ,controllerString);
+        } catch (IOException e) {
+            e.printStackTrace();
+            Messages.showErrorDialog("Controller text create error!", "error");
+            response.failure("Controller text create error!");
             return response;
         }
 
